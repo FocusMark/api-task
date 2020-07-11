@@ -1,0 +1,23 @@
+{
+    "name": "delete-test-01",
+    "description": "delete-test-01-description",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "aws-sdk": "^2.683.0",
+        "aws-xray-sdk": "^3.0.1",
+        "jsonschema": "^1.2.6",
+        "uuid": "^8.1.0",
+        "validate.js": "^0.13.1"
+    },
+    "devDependencies": {
+        "aws-sdk-mock": "^5.1.0",
+        "chai": "^4.2.0",
+        "jest": "^24.7.1",
+        "mocha": "^6.1.4",
+        "sinon": "^9.0.2"
+    },
+    "scripts": {
+        "test": "jest"
+    }
+}

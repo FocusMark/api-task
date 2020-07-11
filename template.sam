@@ -1,0 +1,334 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  FocusMark REST services for the Task API. Includes API, SNS Topic, and DynamoDB Table
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+Parameters:
+  TargetEnvironment:
+    Description: 'Examples can be dev, test or prod'
+    Type: 'String'
+
+Resources:
+
+  # DynamoDB Table for storing the Task records
+  TaskTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'focusmark-${TargetEnvironment}-dynamodb-taskstore'
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: taskId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: taskId
+          KeyType: RANGE
+      ProvisionedThroughput: 
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  # API Gateway used by the Task API.
+  # Auth setup example from https://github.com/awslabs/serverless-application-model/blob/master/examples/2016-10-31/api_cognito_auth/template.yaml
+  TaskApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref TargetEnvironment
+      Name: !Sub 'focusmark-${TargetEnvironment}-apigateway-task'
+      MethodSettings:
+        - LoggingLevel: 'INFO'
+          ResourcePath: '/'
+          MetricsEnabled: 'true'
+          DataTraceEnabled: 'true'
+          HttpMethod: '*'
+      Auth:
+        DefaultAuthorizer: ApiGetTaskAuthorizer
+        Authorizers:
+          ApiPostTaskAuthorizer:
+            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            Identity: 
+              Header: 'Authorization'
+            AuthorizationScopes:
+              - "app.focusmark.api.task/task.write"
+          ApiGetTaskAuthorizer:
+            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            Identity: 
+              Header: 'Authorization'
+            AuthorizationScopes:
+              - "app.focusmark.api.task/task.read"
+              
+  postItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_post'
+      Handler: src/handlers/post-handler.postHandler
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 10
+      Description: HTT POST handler for the /task API endpoint
+      Role: !GetAtt postItemFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_projectTable: !Ref ProjectTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiPostTaskAuthorizer
+            Path: /
+            Method: POST
+            RestApiId:
+              Ref: TaskApi
+              
+  putItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_put'
+      Handler: src/handlers/put-handler.putHandler
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 10
+      Description: HTT PUT handler for the /task/{taskId} API endpoint
+      Role: !GetAtt putItemFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiPostTaskAuthorizer
+            Path: /{taskId}
+            Method: PUT
+            RestApiId:
+              Ref: TaskApi
+
+  getAllItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-all-handler.getAllHandler
+      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_getall'
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 100
+      Description: HTTP GET handler for the /task API endpoint to retrieve all Tasks for a user.
+      Role: !GetAtt getAllItemsFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiGetTaskAuthorizer
+            Path: /
+            Method: GET
+            RestApiId:
+              Ref: TaskApi
+              
+  getItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-item-handler.getItemHandler
+      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_getitem'
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 100
+      Description: HTTP GET handler for the /task/{taskId} API endpoint to retrieve a specific Task for a user.
+      Role: !GetAtt getItemFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiGetTaskAuthorizer
+            Path: /{taskId}
+            Method: GET
+            RestApiId:
+              Ref: TaskApi
+        
+  # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
+  postItemFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows inserting new records into the ${TaskTable} table'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_post'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_post'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:PutItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        
+  # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
+  putItemFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows inserting new records into the ${TaskTable} table that represent updates to a Task'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_put'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_put'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
+  getAllItemsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows querying records from the ${TaskTable} table that represent a Task'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_getall'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_getall'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:Query'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        
+  # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
+  getItemFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows getting a single record from the ${TaskTable} table that represent a Task'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_getitem'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_getitem'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:GetItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+Outputs:
+  ApiEndPoint:
+    Description: "API Gateway endpoint URL for target environment stage"
+    Value: !Sub "https://${TaskApi}.execute-api.${AWS::Region}.amazonaws.com/${TargetEnvironment}/"
+  ApiId:
+    Description: "ID of the Task API resource"
+    Value: !Ref TaskApi
+    Export:
+      Name: !Sub 'focusmark-${TargetEnvironment}-apigateway-task'

@@ -1,0 +1,16 @@
+Description: >-
+  FocusMark Domain mapping for the the Task API to the FocusMark API Gateway Custom Domain (typically api.focusmark.app)
+
+Parameters:
+  TargetEnvironment:
+    Description: 'Examples can be dev, test or prod'
+    Type: 'String'
+
+Resources:
+  TaskApiDomainMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties: 
+      BasePath: project
+      DomainName: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigw-customdomain'}
+      RestApiId: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigateway-task'}
+      Stage: !Ref TargetEnvironment
