@@ -14,7 +14,7 @@ class Configuration {
         };
         
         this.data = {
-            dynamodb_projectTable: process.env.dynamodb_taskTable,
+            dynamodb_taskTable: process.env.dynamodb_taskTable,
             dynamodb_endpointUrl: process.env.dynamodb_endpointUrl
         };
         

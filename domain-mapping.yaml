@@ -10,7 +10,7 @@ Resources:
   TaskApiDomainMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties: 
-      BasePath: project
+      BasePath: task
       DomainName: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigw-customdomain'}
       RestApiId: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigateway-task'}
       Stage: !Ref TargetEnvironment

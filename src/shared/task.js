@@ -1,8 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
-const validate = require("validate.js");
-const Status = require('./shared/status');
-const Methodologies = require('./shared/methodologies');
-const { FMErrors } = require('./shared/errors');
+const Status = require('./status');
+const { FMErrors } = require('./errors');
 
 const MAX_TITLE_LENGTH = 100;
 const MIN_TITLE_LENGTH = 3;
@@ -18,6 +16,8 @@ class Task {
         
         this.targetDate = null;
         this.startDate = null;
+        this.isCompleted = false;
+        
         if (viewModel) {
             this.mapViewModel(viewModel);
         }
@@ -32,7 +32,7 @@ class Task {
         }
         console.info(viewModel);
         for(const field in this) {
-            if (field === 'taskid' || field === 'projectId' || field === 'userId' || field === 'createdAt' || field === 'updatedAt') {
+            if (field === 'taskId' || field === 'userId' || field === 'createdAt' || field === 'updatedAt') {
                 continue;
             }
 
@@ -49,10 +49,17 @@ class Task {
     validate() {
         this.validateTitle();
         this.validateStatus();
+        this.validateProjectId();
+    }
+    
+    validateProjectId() {
+        if (!this.projectId || this.projectId.length <1) {
+            throw FMErrors.PROJECT_ID_VALIDATION_FAILED;
+        }
     }
     
     validateTitle() {
-        if (this.title || this.title.length > MAX_TITLE_LENGTH || this.title.length < MIN_TITLE_LENGTH) {
+        if (!this.title || this.title.length > MAX_TITLE_LENGTH || this.title.length < MIN_TITLE_LENGTH) {
             throw FMErrors.TITLE_VALIDATION_FAILED;
         }
     }

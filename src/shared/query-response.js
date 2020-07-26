@@ -3,15 +3,15 @@ class QueryResponse {
     constructor(statusCode, data, errors, lastId) {
         let body = {
             data: data,
-            errors: errors,
+            error: errors,
             isSuccessful: errors ? false : true,
         };
         
         if (!body.data) {
             body.data = {};
         }
-        if (!body.errors) {
-            body.errors = [];
+        if (!body.error) {
+            body.error = {}
         }
         
         body.pagination = {};

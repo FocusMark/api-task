@@ -26,6 +26,10 @@ const FMErrors = {
     STATUS_VALIDATION_FAILED: {
         code: 4225,
         message: 'Status is invalid. Must use one of the supported values.'
+    },
+    PROJECT_ID_VALIDATION_FAILED: {
+        code: 4226,
+        message: 'Task was not assigned to a valid Project'
     }
 };
 
