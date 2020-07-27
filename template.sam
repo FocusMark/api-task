@@ -47,21 +47,61 @@ Resources:
           DataTraceEnabled: 'true'
           HttpMethod: '*'
       Auth:
-        DefaultAuthorizer: ApiGetTaskAuthorizer
+        DefaultAuthorizer: ApiReadTaskAuthorizer
         Authorizers:
-          ApiPostTaskAuthorizer:
+          ApiDeleteTaskAuthorizer:
+            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            Identity: 
+              Header: 'Authorization'
+            AuthorizationScopes:
+              - "app.focusmark.api.task/task.delete"
+          ApiWriteTaskAuthorizer:
             UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
             Identity: 
               Header: 'Authorization'
             AuthorizationScopes:
               - "app.focusmark.api.task/task.write"
-          ApiGetTaskAuthorizer:
+          ApiReadTaskAuthorizer:
             UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
             Identity: 
               Header: 'Authorization'
             AuthorizationScopes:
               - "app.focusmark.api.task/task.read"
               
+  # Task SNS subscriber for Project deletions
+  projectTopicDeletionFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/handlers/project-deleted-event-handler.projectDeletedEventHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt projectDeletionFunctionRole.Arn
+      FunctionName: !Sub "focusmark-${TargetEnvironment}-lambda-api_task_event_handler_project_deleted"
+      Description: 'Deletes Tasks that are related to a project being deleted.'
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+          sns_project_topic: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      MemorySize: 256
+      Timeout: 300
+      Tracing: Active
+              
+  ProjectTopicLambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties: 
+      Protocol: lambda
+      Endpoint: !GetAtt projectTopicDeletionFunction.Arn
+      TopicArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      
+  ProjectTopicSubscriberLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref projectTopicDeletionFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      
   postItemFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -82,11 +122,75 @@ Resources:
           Type: Api
           Properties:
             Auth:
-              Authorizer: ApiPostTaskAuthorizer
+              Authorizer: ApiWriteTaskAuthorizer
             Path: /
             Method: POST
             RestApiId:
               Ref: TaskApi
+
+  getAllItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-all-handler.getAllHandler
+      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_getall'
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 100
+      Description: HTTP GET handler for the /task API endpoint to retrieve all Tasks for a user.
+      Role: !GetAtt getAllItemsFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiReadTaskAuthorizer
+            Path: /
+            Method: GET
+            RestApiId:
+              Ref: TaskApi
+              
+  projectDeletionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows deleting existing records from the ${TaskTable} table'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_project_topic'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_project_topic'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:DeleteItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
               
   # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
   postItemFunctionRole:
@@ -111,6 +215,45 @@ Resources:
               - Effect: Allow
                 Action: 
                   - 'dynamodb:PutItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  # IAM Role used by the Lambda for handling HTTP GET requests that queries tasks.
+  getAllItemsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows querying records from the ${TaskTable} table that represent a Task'
+      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_getall'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_getall'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:Query'
                 Resource: !GetAtt TaskTable.Arn
               - Effect: Allow
                 Action: 

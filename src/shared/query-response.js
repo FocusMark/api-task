@@ -25,6 +25,9 @@ class QueryResponse {
         
         if (Array.isArray(data)) {
             body.pagination.pageSize = data.length;
+        }  else if (Object.keys(body.data).length === 0) {
+            // if the body.data object is empty then we have nothing to return.
+            body.pagination.pageSize = 0;
         } else {
             body.pagination.pageSize = 1;
         }

@@ -15,7 +15,8 @@ class Configuration {
         
         this.data = {
             dynamodb_taskTable: process.env.dynamodb_taskTable,
-            dynamodb_endpointUrl: process.env.dynamodb_endpointUrl
+            dynamodb_endpointUrl: process.env.dynamodb_endpointUrl,
+            pageSize: 20
         };
         
         // Force the environment to be 'local' if nothing is set to prevent

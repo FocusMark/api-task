@@ -30,6 +30,10 @@ const FMErrors = {
     PROJECT_ID_VALIDATION_FAILED: {
         code: 4226,
         message: 'Task was not assigned to a valid Project'
+    },
+    MALFORMED_PROJECT_EVENT: {
+        code: 4227,
+        message: 'Task services received a malformed Json payload from SNS for a Project event'
     }
 };
 
