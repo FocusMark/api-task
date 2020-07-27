@@ -17,7 +17,7 @@ exports.postHandler = async (event, context) => {
         
         await saveTask(user, task);
         
-        let responseViewModel = { taskId: task.projectId };
+        let responseViewModel = { taskId: task.taskId };
         return new Response(201, responseViewModel, null, task.taskId);
     } catch(err) {
         console.info(err);

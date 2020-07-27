@@ -75,7 +75,7 @@ Resources:
       Handler: src/handlers/project-deleted-event-handler.projectDeletedEventHandler
       Runtime: nodejs12.x
       Role: !GetAtt projectDeletionFunctionRole.Arn
-      FunctionName: !Sub "focusmark-${TargetEnvironment}-lambda-api_task_event_handler_project_deleted"
+      FunctionName: !Sub "focusmark-${TargetEnvironment}-lambda-event_task_project_deleted"
       Description: 'Deletes Tasks that are related to a project being deleted.'
       Environment:
         Variables:
@@ -176,6 +176,7 @@ Resources:
               - Effect: Allow
                 Action: 
                   - 'dynamodb:DeleteItem'
+                  - 'dynamodb:Query'
                 Resource: !GetAtt TaskTable.Arn
               - Effect: Allow
                 Action: 
