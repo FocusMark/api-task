@@ -6,6 +6,7 @@ sam_stack_name=focusmark-"$deployed_environment"-sam-api-task
 sam_template_file='template.sam'
 sam_s3_bucket_name=focusmark-$deployed_environment-s3-deployments
 
+echo Deploying the $sam_stack_name stack.
 sam deploy \
   --template-file $sam_template_file \
   --stack-name $sam_stack_name \
@@ -19,6 +20,7 @@ sam deploy \
 cf_stack_name=focusmark-"$deployed_environment"-cf-apiTaskDomainMapping
 cf_template_file='domain-mapping.yaml'
 
+echo Deploying the $cf_stack_name stack.
 aws cloudformation deploy \
   --template-file $cf_template_file \
   --stack-name $cf_stack_name \
