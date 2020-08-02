@@ -93,6 +93,9 @@ Resources:
       Protocol: lambda
       Endpoint: !GetAtt projectTopicDeletionFunction.Arn
       TopicArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      FilterPolicy:
+        Event:
+          - 'project-deleted'
       
   ProjectTopicSubscriberLambdaPermission:
     Type: AWS::Lambda::Permission
