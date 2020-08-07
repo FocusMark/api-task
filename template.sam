@@ -1,6 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  FocusMark REST services for the Task API. Includes API, SNS Topic, and DynamoDB Table
+Description: REST services for the Task API. Includes API, SNS Topic, and DynamoDB Table
 
 # Transform section specifies one or more macros that AWS CloudFormation uses to process your template
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
@@ -11,6 +10,10 @@ Parameters:
   TargetEnvironment:
     Description: 'Examples can be dev, test or prod'
     Type: 'String'
+    
+  ProductName:
+    Description: 'Represents the name of the product you want to call the deployment'
+    Type: 'String'
 
 Resources:
 
@@ -18,7 +21,7 @@ Resources:
   TaskTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'focusmark-${TargetEnvironment}-dynamodb-taskstore'
+      TableName: !Sub '${ProductName}-${TargetEnvironment}-dynamodb-taskstore'
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -39,7 +42,7 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref TargetEnvironment
-      Name: !Sub 'focusmark-${TargetEnvironment}-apigateway-task'
+      Name: !Sub '${ProductName}-${TargetEnvironment}-apigateway-task'
       MethodSettings:
         - LoggingLevel: 'INFO'
           ResourcePath: '/'
@@ -50,23 +53,23 @@ Resources:
         DefaultAuthorizer: ApiReadTaskAuthorizer
         Authorizers:
           ApiDeleteTaskAuthorizer:
-            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            UserPoolArn: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-customeruserpoolarn'}
             Identity: 
               Header: 'Authorization'
             AuthorizationScopes:
-              - "app.focusmark.api.task/task.delete"
+              - !Sub "app.${ProductName}.api.task/task.delete"
           ApiWriteTaskAuthorizer:
-            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            UserPoolArn: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-customeruserpoolarn'}
             Identity: 
               Header: 'Authorization'
             AuthorizationScopes:
-              - "app.focusmark.api.task/task.write"
+              - !Sub "app.${ProductName}.api.task/task.write"
           ApiReadTaskAuthorizer:
-            UserPoolArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-userpool'}
+            UserPoolArn: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-customeruserpoolarn'}
             Identity: 
               Header: 'Authorization'
             AuthorizationScopes:
-              - "app.focusmark.api.task/task.read"
+              - !Sub "app.${ProductName}.api.task/task.read"
               
   # Task SNS subscriber for Project deletions
   projectTopicDeletionFunction:
@@ -75,14 +78,14 @@ Resources:
       Handler: src/handlers/project-deleted-event-handler.projectDeletedEventHandler
       Runtime: nodejs12.x
       Role: !GetAtt projectDeletionFunctionRole.Arn
-      FunctionName: !Sub "focusmark-${TargetEnvironment}-lambda-event_task_project_deleted"
+      FunctionName: !Sub "${ProductName}-${TargetEnvironment}-lambda-event_task_project_deleted"
       Description: 'Deletes Tasks that are related to a project being deleted.'
       Environment:
         Variables:
           deployed_environment: !Ref TargetEnvironment
           dynamodb_taskTable: !Ref TaskTable
           dynamodb_endpointUrl: ''
-          sns_project_topic: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+          sns_project_topic: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-sns-ProjectTopic'}
       MemorySize: 256
       Timeout: 300
       Tracing: Active
@@ -92,7 +95,7 @@ Resources:
     Properties: 
       Protocol: lambda
       Endpoint: !GetAtt projectTopicDeletionFunction.Arn
-      TopicArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      TopicArn: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-sns-ProjectTopic'}
       FilterPolicy:
         Event:
           - 'project-deleted'
@@ -103,12 +106,12 @@ Resources:
       FunctionName: !Ref projectTopicDeletionFunction
       Action: lambda:InvokeFunction
       Principal: sns.amazonaws.com
-      SourceArn: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-sns-ProjectTopic'}
+      SourceArn: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-sns-ProjectTopic'}
       
   postItemFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_post'
+      FunctionName: !Sub '${ProductName}-${TargetEnvironment}-lambda-api_task_post'
       Handler: src/handlers/post-handler.postHandler
       Runtime: nodejs12.x
       MemorySize: 256
@@ -135,7 +138,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/handlers/get-all-handler.getAllHandler
-      FunctionName: !Sub 'focusmark-${TargetEnvironment}-lambda-api_task_getall'
+      FunctionName: !Sub '${ProductName}-${TargetEnvironment}-lambda-api_task_getall'
       Runtime: nodejs12.x
       MemorySize: 256
       Timeout: 100
@@ -161,7 +164,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       Description: !Sub 'Allows deleting existing records from the ${TaskTable} table'
-      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_project_topic'
+      RoleName: !Sub '${ProductName}-${TargetEnvironment}-role-api_task_project_topic'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -172,7 +175,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Policies:
-        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_project_topic'
+        - PolicyName: !Sub '${ProductName}-${TargetEnvironment}-policy-api_task_project_topic'
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -201,7 +204,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       Description: !Sub 'Allows inserting new records into the ${TaskTable} table'
-      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_post'
+      RoleName: !Sub '${ProductName}-${TargetEnvironment}-role-api_task_post'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -212,7 +215,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Policies:
-        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_post'
+        - PolicyName: !Sub '${ProductName}-${TargetEnvironment}-policy-api_task_post'
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -240,7 +243,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       Description: !Sub 'Allows querying records from the ${TaskTable} table that represent a Task'
-      RoleName: !Sub 'focusmark-${TargetEnvironment}-role-api_task_getall'
+      RoleName: !Sub '${ProductName}-${TargetEnvironment}-role-api_task_getall'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -251,7 +254,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Policies:
-        - PolicyName: !Sub 'focusmark-${TargetEnvironment}-policy-api_task_getall'
+        - PolicyName: !Sub '${ProductName}-${TargetEnvironment}-policy-api_task_getall'
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -282,4 +285,4 @@ Outputs:
     Description: "ID of the Task API resource"
     Value: !Ref TaskApi
     Export:
-      Name: !Sub 'focusmark-${TargetEnvironment}-apigateway-task'
+      Name: !Sub '${ProductName}-${TargetEnvironment}-apigateway-task'

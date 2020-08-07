@@ -1,3 +1,5 @@
+product_name=$focusmark_productname
+
 echo Deploying into the $deployed_environment environment.
 npm install
 
@@ -10,10 +12,12 @@ echo Deploying the $sam_stack_name stack.
 sam deploy \
   --template-file $sam_template_file \
   --stack-name $sam_stack_name \
-  --parameter-overrides TargetEnvironment=$deployed_environment \
   --s3-bucket $sam_s3_bucket_name \
   --s3-prefix focusmark-$deployed_environment-sam-api_task \
-  --capabilities CAPABILITY_NAMED_IAM
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+      TargetEnvironment=$deployed_environment \
+      ProductName=$product_name
   
 # Execute the CloudFormation template needed to map the API Gateway associated with the above SAM tempalte
 # to the existing custom domain deployed with the core infrastructure
@@ -25,4 +29,6 @@ aws cloudformation deploy \
   --template-file $cf_template_file \
   --stack-name $cf_stack_name \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides TargetEnvironment=$deployed_environment
+  --parameter-overrides \
+      TargetEnvironment=$deployed_environment \
+      ProductName=$product_name
