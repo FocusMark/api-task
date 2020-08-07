@@ -5,12 +5,16 @@ Parameters:
   TargetEnvironment:
     Description: 'Examples can be dev, test or prod'
     Type: 'String'
+    
+  ProductName:
+    Description: 'Represents the name of the product you want to call the deployment'
+    Type: 'String'
 
 Resources:
   TaskApiDomainMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties: 
       BasePath: task
-      DomainName: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigw-customdomain'}
-      RestApiId: {'Fn::ImportValue': !Sub 'focusmark-${TargetEnvironment}-apigateway-task'}
+      DomainName: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-apigw-customdomain'}
+      RestApiId: {'Fn::ImportValue': !Sub '${ProductName}-${TargetEnvironment}-apigateway-task'}
       Stage: !Ref TargetEnvironment
