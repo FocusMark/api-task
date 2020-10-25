@@ -9,6 +9,7 @@ sam_template_file='template.sam'
 sam_s3_bucket_name=focusmark-$deployed_environment-s3-deployments
 
 echo Deploying the $sam_stack_name stack.
+cfn-lint $sam_template_file
 sam deploy \
   --template-file $sam_template_file \
   --stack-name $sam_stack_name \
@@ -25,6 +26,7 @@ cf_stack_name=focusmark-"$deployed_environment"-cf-api-taskroute
 cf_template_file='domain-mapping.yaml'
 
 echo Deploying the $cf_stack_name stack.
+cfn-lint $cf_template_file
 aws cloudformation deploy \
   --template-file $cf_template_file \
   --stack-name $cf_stack_name \
