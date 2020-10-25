@@ -16,6 +16,9 @@ The API adopts the Command Query Responsibility Segregation (CQRS) pattern. This
 - [AWS SAM](https://aws.amazon.com/serverless/sam/)
 - [Docker](https://docker/com)
 
+## Optional
+- [cfn-lint](https://github.com/aws-cloudformation/cfn-python-lint)
+
 ## Environment Variables
 In order to run the deployment script you must have your environment set up with a few environment variables. The following table outlines the environment variables required with example values.
 
