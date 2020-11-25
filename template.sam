@@ -43,6 +43,7 @@ Resources:
     Properties:
       StageName: !Ref TargetEnvironment
       Name: !Sub '${ProductName}-${TargetEnvironment}-apigateway-task'
+      TracingEnabled: true
       MethodSettings:
         - LoggingLevel: 'INFO'
           ResourcePath: '/'
@@ -131,6 +132,32 @@ Resources:
               Authorizer: ApiWriteTaskAuthorizer
             Path: /
             Method: POST
+            RestApiId:
+              Ref: TaskApi
+              
+  putItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProductName}-${TargetEnvironment}-lambda-api_task_put'
+      Handler: src/handlers/put-handler.putHandler
+      Runtime: nodejs12.x
+      MemorySize: 256
+      Timeout: 10
+      Description: HTT PUT handler for the /task API endpoint
+      Role: !GetAtt putItemFunctionRole.Arn
+      Environment:
+        Variables:
+          deployed_environment: !Ref TargetEnvironment
+          dynamodb_taskTable: !Ref TaskTable
+          dynamodb_endpointUrl: ''
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: ApiWriteTaskAuthorizer
+            Path: /{taskId}
+            Method: PUT
             RestApiId:
               Ref: TaskApi
 
@@ -222,6 +249,46 @@ Resources:
               - Effect: Allow
                 Action: 
                   - 'dynamodb:PutItem'
+                Resource: !GetAtt TaskTable.Arn
+              - Effect: Allow
+                Action: 
+                  - 'xray:CreateGroup'
+                  - 'xray:CreateSamplingRule'
+                Resource: 
+                  - 'arn:aws:xray:*:*:group/*/*'
+                  - 'arn:aws:xray:*:*:sampling-rule/*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTelemetryRecords'
+                  - 'xray:PutTraceSegments'
+                Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        
+  # IAM Role used by the Lambda for handling HTTP POST requests that create projects.
+  putItemFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: !Sub 'Allows inserting new records into the ${TaskTable} table'
+      RoleName: !Sub '${ProductName}-${TargetEnvironment}-role-api_task_put'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub '${ProductName}-${TargetEnvironment}-policy-api_task_put'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
                 Resource: !GetAtt TaskTable.Arn
               - Effect: Allow
                 Action: 
